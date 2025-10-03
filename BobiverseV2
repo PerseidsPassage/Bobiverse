@@ -19,10 +19,10 @@
         <option>All These Worlds</option>
     </select>
     <select id="chapterSelect"></select>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/build/three.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/js/loaders/FontLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@master/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://unpkg.com/three@0.180.0/build/three.js"></script>
+    <script src="https://unpkg.com/three@0.180.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://unpkg.com/three@0.180.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://unpkg.com/three@0.180.0/examples/js/geometries/TextGeometry.js"></script>
     <script>
         // Scene setup
         const scene = new THREE.Scene();
@@ -148,7 +148,7 @@
         // Font loader for labels
         const loader = new THREE.FontLoader();
         let font = null;
-        loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
+        loader.load('https://unpkg.com/three@0.180.0/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
             font = loadedFont;
             // Initial update
             bookSelect.dispatchEvent(new Event('change'));
