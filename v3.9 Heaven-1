@@ -50,7 +50,7 @@
 
         // Add nebula background
         const rgbeLoader = new THREE.RGBELoader();
-        rgbeLoader.load('https://www.spacespheremaps.com/wp-content/uploads/HDR_multi_nebulae.hdr', function (texture) {
+        rgbeLoader.load('https://www.spacespheremaps.com/wp-content/uploads/HDR_hazy_nebulae.hdr', function (texture) {
             texture.mapping = THREE.EquirectangularReflectionMapping;
             scene.background = texture;
             scene.environment = texture; // For PBR lighting
@@ -329,35 +329,43 @@
         // Bob meshes (spheres and labels, to clear on update)
         let bobMeshes = [];
 
-        // Function to create a simple spaceship model
+        // Function to create a simple spaceship model resembling Heaven-1 (cylindrical probe)
         function createSpaceship() {
             const spaceship = new THREE.Group();
 
-            // Body (cylinder)
-            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1, 32);
-            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
+            // Main body (long cylinder)
+            const bodyGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 32);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 50 });
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
             body.rotation.x = Math.PI / 2; // Orient horizontally
             spaceship.add(body);
 
-            // Nose (cone)
-            const noseGeometry = new THREE.ConeGeometry(0.2, 0.5, 32);
-            const nose = new THREE.Mesh(noseGeometry, bodyMaterial);
-            nose.position.z = 0.75;
-            nose.rotation.x = Math.PI / 2;
-            spaceship.add(nose);
+            // Front sensor/dish (sphere)
+            const sensorGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+            const sensorMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 100 });
+            const sensor = new THREE.Mesh(sensorGeometry, sensorMaterial);
+            sensor.position.z = 0.75;
+            spaceship.add(sensor);
 
-            // Fins (boxes)
-            const finGeometry = new THREE.BoxGeometry(0.1, 0.5, 0.01);
-            const finMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa });
-            for (let i = 0; i < 4; i++) {
-                const fin = new THREE.Mesh(finGeometry, finMaterial);
-                fin.position.set(0, 0, -0.5);
-                fin.rotation.z = i * (Math.PI / 2);
-                fin.position.x = Math.cos(fin.rotation.z) * 0.15;
-                fin.position.y = Math.sin(fin.rotation.z) * 0.15;
-                spaceship.add(fin);
+            // Rear engine (cone for fusion drive)
+            const engineGeometry = new THREE.ConeGeometry(0.25, 0.5, 32);
+            const engineMaterial = new THREE.MeshPhongMaterial({ color: 0xff8800, shininess: 50 });
+            const engine = new THREE.Mesh(engineGeometry, engineMaterial);
+            engine.position.z = -0.75;
+            engine.rotation.x = -Math.PI / 2;
+            spaceship.add(engine);
+
+            // Antennas (thin cylinders)
+            for (let i = 0; i < 3; i++) {
+                const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
+                const antenna = new THREE.Mesh(antennaGeometry, bodyMaterial);
+                const angle = i * (2 * Math.PI / 3);
+                antenna.position.set(Math.cos(angle) * 0.2, Math.sin(angle) * 0.2, 0);
+                antenna.rotation.z = Math.PI / 4; // Tilt
+                spaceship.add(antenna);
             }
+
+            spaceship.scale.set(0.5, 0.5, 0.5); // Scale down if needed
 
             return spaceship;
         }
