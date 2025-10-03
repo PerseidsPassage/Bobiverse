@@ -9,6 +9,7 @@
         canvas { display: block; }
         #info { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; }
         #bookSelect, #chapterSelect { position: absolute; top: 40px; left: 10px; margin-bottom: 10px; }
+        #controls-info { position: absolute; bottom: 10px; left: 10px; color: white; font-family: Arial; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -19,6 +20,7 @@
         <option>All These Worlds</option>
     </select>
     <select id="chapterSelect"></select>
+    <div id="controls-info">Controls: Mouse drag to orbit, scroll to zoom, right-drag to pan</div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/FontLoader.js"></script>
@@ -35,6 +37,20 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
+
+        // Add space background (starfield)
+        const starCount = 5000;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i += 3) {
+            starPositions[i] = (Math.random() - 0.5) * 2000;
+            starPositions[i + 1] = (Math.random() - 0.5) * 2000;
+            starPositions[i + 2] = (Math.random() - 0.5) * 2000;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1, sizeAttenuation: true });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
 
         // Systems with coordinates (from first three books)
         const systems = {
@@ -58,11 +74,11 @@
             'Gamma Leporis': { x: 12.0, y: 18.0, z: -8.0 } // Approximate
         };
 
-        // Add all systems as small white spheres
+        // Add all systems as yellow sun-like spheres
         const systemMeshes = []; // For spheres and labels
         Object.entries(systems).forEach(([name, pos]) => {
-            const geometry = new THREE.SphereGeometry(0.3, 16, 16);
-            const material = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
+            const geometry = new THREE.SphereGeometry(0.5, 32, 32); // Slightly larger
+            const material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow for suns
             const sphere = new THREE.Mesh(geometry, material);
             sphere.position.set(pos.x, pos.y, pos.z);
             scene.add(sphere);
