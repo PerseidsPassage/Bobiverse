@@ -161,7 +161,7 @@
             scene.add(sphere);
             systemMeshes.push(sphere);
 
-            // Add planets for this system
+            // Add planets for this system (spheres only, labels added later)
             const systemPlanets = planets[name] || [];
             systemPlanets.forEach((planet, index) => {
                 const planetGeometry = new THREE.SphereGeometry(0.2, 16, 16);
@@ -172,21 +172,6 @@
                 planetMesh.userData = { name: planet.name, type: 'planet' };
                 scene.add(planetMesh);
                 systemMeshes.push(planetMesh);
-
-                // Planet label
-                if (font) { // If font loaded
-                    const textGeo = new THREE.TextGeometry(planet.name, {
-                        font: font,
-                        size: 0.3,
-                        height: 0.05
-                    });
-                    const textMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
-                    const text = new THREE.Mesh(textGeo, textMat);
-                    text.position.set(pos.x + 1 + index * 0.5 + 0.3, pos.y - 0.3, pos.z);
-                    scene.add(text);
-                    allLabels.push(text);
-                    systemMeshes.push(text);
-                }
             });
         });
 
@@ -291,7 +276,7 @@
                 systemMeshes.push(text);
             });
 
-            // Add planet labels if not already added
+            // Add planet labels
             Object.entries(planets).forEach(([sysName, sysPlanets]) => {
                 const pos = systems[sysName];
                 if (pos) {
