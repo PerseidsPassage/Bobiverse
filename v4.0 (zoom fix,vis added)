@@ -33,7 +33,10 @@
         // Scene setup
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1;
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
@@ -47,10 +50,12 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
+        controls.minDistance = 0.01;
+        controls.maxDistance = Infinity;
 
         // Add nebula background
         const rgbeLoader = new THREE.RGBELoader();
-        rgbeLoader.load('https://www.spacespheremaps.com/wp-content/uploads/HDR_multi_nebulae.hdr', function (texture) {
+        rgbeLoader.load('https://www.spacespheremaps.com/wp-content/uploads/HDR_hazy_nebulae.hdr', function (texture) {
             texture.mapping = THREE.EquirectangularReflectionMapping;
             scene.background = texture;
             scene.environment = texture; // For PBR lighting
@@ -322,203 +327,4 @@
         loader.load('https://cdn.jsdelivr.net/npm/three@0.147.0/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
             font = loadedFont;
             addSystemLabels();
-            // Initial update
-            bookSelect.dispatchEvent(new Event('change'));
-        });
-
-        // Bob meshes (spheres and labels, to clear on update)
-        let bobMeshes = [];
-
-        // Function to get sorted chapters up to the selected one
-        function getCumulativeBobs(book, selectedChapter) {
-            const chapterKeys = Object.keys(bobData[book] || {});
-            // Sort chapters numerically by extracting number after 'Chapter '
-            chapterKeys.sort((a, b) => {
-                const numA = parseInt(a.replace('Chapter ', ''), 10);
-                const numB = parseInt(b.replace('Chapter ', ''), 10);
-                return numA - numB;
-            });
-
-            const bobPositions = new Map(); // bobName => system
-
-            const selectedIndex = chapterKeys.indexOf(selectedChapter);
-            if (selectedIndex === -1) return [];
-
-            // Process chapters up to selected
-            for (let i = 0; i <= selectedIndex; i++) {
-                const chapter = chapterKeys[i];
-                const list = bobData[book][chapter] || [];
-                list.forEach(bob => {
-                    bobPositions.set(bob.name, bob.system);
-                });
-            }
-
-            // Return list of {name, system} for all known bobs
-            return Array.from(bobPositions.entries()).map(([name, system]) => ({name, system}));
-        }
-
-        // Function to update Bobs (cumulative)
-        function updateBobs(book, chapter) {
-            // Remove old bob meshes
-            bobMeshes.forEach(m => scene.remove(m));
-            bobMeshes = [];
-            allLabels = allLabels.filter(label => systemMeshes.includes(label)); // Reset to only system labels
-
-            if (!font) return; // Wait for font
-
-            const cumulativeList = getCumulativeBobs(book, chapter);
-
-            // Group bobs by system to handle stacking labels
-            const bobsBySystem = {};
-            cumulativeList.forEach(bob => {
-                if (!bobsBySystem[bob.system]) bobsBySystem[bob.system] = [];
-                bobsBySystem[bob.system].push(bob.name);
-            });
-
-            Object.entries(bobsBySystem).forEach(([system, names]) => {
-                const pos = systems[system];
-                if (pos) {
-                    names.forEach((name, index) => {
-                        // Bob sphere (slightly offset if multiple)
-                        const geometry = new THREE.SphereGeometry(0.7, 32, 32);
-                        const material = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
-                        const sphere = new THREE.Mesh(geometry, material);
-                        sphere.position.set(pos.x + index * 0.2 - 1.0, pos.y + 1.5, pos.z); // Offset to left and above to avoid planets
-                        sphere.userData = { name: name, type: 'bob' };
-                        scene.add(sphere);
-                        bobMeshes.push(sphere);
-
-                        // Label
-                        const textGeo = new THREE.TextGeometry(name, {
-                            font: font,
-                            size: 0.5,
-                            height: 0.1
-                        });
-                        const textMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-                        const text = new THREE.Mesh(textGeo, textMat);
-                        text.position.set(pos.x + index * 0.2 - 1.0 + 0.8, pos.y + 1.5 + 0.8 - index * 0.6, pos.z); // Adjusted stack
-                        text.lookAt(camera.position); // Face camera initially
-                        scene.add(text);
-                        bobMeshes.push(text);
-                        allLabels.push(text);
-                    });
-                }
-            });
-
-            // Dynamically position camera to frame the Bobs
-            if (cumulativeList.length > 0) {
-                const box = new THREE.Box3();
-                cumulativeList.forEach(bob => {
-                    const pos = systems[bob.system];
-                    if (pos) {
-                        box.expandByPoint(new THREE.Vector3(pos.x, pos.y, pos.z));
-                    }
-                });
-                if (!box.isEmpty()) {
-                    const center = new THREE.Vector3();
-                    box.getCenter(center);
-                    controls.target.copy(center);
-
-                    const size = new THREE.Vector3();
-                    box.getSize(size);
-                    let maxDim = Math.max(size.x, size.y, size.z);
-                    if (maxDim < 1) maxDim = 10; // Minimum view size for close/ single points
-
-                    const fov = camera.fov * (Math.PI / 180);
-                    let cameraZ = Math.abs(maxDim / Math.tan(fov / 2));
-                    cameraZ *= 1.5; // Padding
-
-                    camera.position.copy(center.clone().add(new THREE.Vector3(0, 0, cameraZ)));
-                    camera.lookAt(center);
-                    controls.update();
-                }
-            } else {
-                // Default to Sol
-                controls.target.set(0, 0, 0);
-                camera.position.set(0, 0, 50);
-                camera.lookAt(0, 0, 0);
-                controls.update();
-            }
-        }
-
-        // Dropdown handlers
-        const bookSelect = document.getElementById('bookSelect');
-        const chapterSelect = document.getElementById('chapterSelect');
-        bookSelect.onchange = () => {
-            const book = bookSelect.value;
-            chapterSelect.innerHTML = '';
-            const chapterKeys = Object.keys(bobData[book] || {});
-            // Sort chapters numerically
-            chapterKeys.sort((a, b) => {
-                const numA = parseInt(a.replace('Chapter ', ''), 10);
-                const numB = parseInt(b.replace('Chapter ', ''), 10);
-                return numA - numB;
-            });
-            chapterKeys.forEach(ch => {
-                const option = document.createElement('option');
-                option.value = ch;
-                option.text = ch;
-                chapterSelect.add(option);
-            });
-            if (chapterSelect.options.length > 0) {
-                updateBobs(book, chapterSelect.value);
-            }
-        };
-        chapterSelect.onchange = () => {
-            updateBobs(bookSelect.value, chapterSelect.value);
-        };
-
-        // Camera position
-        camera.position.z = 50;
-
-        // Raycaster for tooltips
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        const tooltip = document.getElementById('tooltip');
-
-        function onMouseMove(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-
-            const intersects = raycaster.intersectObjects(systemMeshes.concat(bobMeshes));
-
-            if (intersects.length > 0) {
-                const obj = intersects[0].object;
-                if (obj.userData && obj.userData.name) {
-                    tooltip.innerHTML = obj.userData.name + (obj.userData.type === 'system' ? ' (System)' : (obj.userData.type === 'planet' ? ' (Planet)' : ' (Bob)'));
-                    tooltip.style.display = 'block';
-                    tooltip.style.left = event.clientX + 10 + 'px';
-                    tooltip.style.top = event.clientY + 10 + 'px';
-                    document.body.style.cursor = 'pointer';
-                }
-            } else {
-                tooltip.style.display = 'none';
-                document.body.style.cursor = 'default';
-            }
-        }
-
-        document.addEventListener('mousemove', onMouseMove);
-
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
-            // Update all labels to face camera
-            allLabels.forEach(label => {
-                label.lookAt(camera.position);
-            });
-            controls.update();
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        // Resize handler
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
-</body>
-</html>
+            // Ini
