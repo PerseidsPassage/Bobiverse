@@ -28,6 +28,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/FontLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/RGBELoader.js"></script>
     <script>
         // Scene setup
         const scene = new THREE.Scene();
@@ -46,6 +47,14 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableZoom = true;
         controls.enablePan = true;
+
+        // Add nebula background
+        const rgbeLoader = new THREE.RGBELoader();
+        rgbeLoader.load('https://www.spacespheremaps.com/wp-content/uploads/HDR_multi_nebulae.hdr', function (texture) {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            scene.background = texture;
+            scene.environment = texture; // For PBR lighting
+        });
 
         // Add space background (starfield)
         const starCount = 5000;
@@ -320,6 +329,39 @@
         // Bob meshes (spheres and labels, to clear on update)
         let bobMeshes = [];
 
+        // Function to create a simple spaceship model
+        function createSpaceship() {
+            const spaceship = new THREE.Group();
+
+            // Body (cylinder)
+            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 1, 32);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.rotation.x = Math.PI / 2; // Orient horizontally
+            spaceship.add(body);
+
+            // Nose (cone)
+            const noseGeometry = new THREE.ConeGeometry(0.2, 0.5, 32);
+            const nose = new THREE.Mesh(noseGeometry, bodyMaterial);
+            nose.position.z = 0.75;
+            nose.rotation.x = Math.PI / 2;
+            spaceship.add(nose);
+
+            // Fins (boxes)
+            const finGeometry = new THREE.BoxGeometry(0.1, 0.5, 0.01);
+            const finMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa });
+            for (let i = 0; i < 4; i++) {
+                const fin = new THREE.Mesh(finGeometry, finMaterial);
+                fin.position.set(0, 0, -0.5);
+                fin.rotation.z = i * (Math.PI / 2);
+                fin.position.x = Math.cos(fin.rotation.z) * 0.15;
+                fin.position.y = Math.sin(fin.rotation.z) * 0.15;
+                spaceship.add(fin);
+            }
+
+            return spaceship;
+        }
+
         // Function to get sorted chapters up to the selected one
         function getCumulativeBobs(book, selectedChapter) {
             const chapterKeys = Object.keys(bobData[book] || {});
@@ -370,14 +412,12 @@
                 const pos = systems[system];
                 if (pos) {
                     names.forEach((name, index) => {
-                        // Bob sphere (slightly offset if multiple)
-                        const geometry = new THREE.SphereGeometry(0.7, 32, 32);
-                        const material = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
-                        const sphere = new THREE.Mesh(geometry, material);
-                        sphere.position.set(pos.x + index * 0.2 - 1.0, pos.y + 1.5, pos.z); // Offset to left and above to avoid planets
-                        sphere.userData = { name: name, type: 'bob' };
-                        scene.add(sphere);
-                        bobMeshes.push(sphere);
+                        // Create spaceship instead of sphere
+                        const spaceship = createSpaceship();
+                        spaceship.position.set(pos.x + index * 0.2 - 1.0, pos.y + 1.5, pos.z); // Offset to left and above to avoid planets
+                        spaceship.userData = { name: name, type: 'bob' };
+                        scene.add(spaceship);
+                        bobMeshes.push(spaceship);
 
                         // Label
                         const textGeo = new THREE.TextGeometry(name, {
