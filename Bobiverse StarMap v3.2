@@ -256,6 +256,41 @@
                     });
                 }
             });
+
+            // Dynamically position camera to frame the Bobs
+            if (cumulativeList.length > 0) {
+                const box = new THREE.Box3();
+                cumulativeList.forEach(bob => {
+                    const pos = systems[bob.system];
+                    if (pos) {
+                        box.expandByPoint(new THREE.Vector3(pos.x, pos.y, pos.z));
+                    }
+                });
+                if (!box.isEmpty()) {
+                    const center = new THREE.Vector3();
+                    box.getCenter(center);
+                    controls.target.copy(center);
+
+                    const size = new THREE.Vector3();
+                    box.getSize(size);
+                    let maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim < 1) maxDim = 10; // Minimum view size for close/ single points
+
+                    const fov = camera.fov * (Math.PI / 180);
+                    let cameraZ = Math.abs(maxDim / Math.tan(fov / 2));
+                    cameraZ *= 1.5; // Padding
+
+                    camera.position.copy(center.clone().add(new THREE.Vector3(0, 0, cameraZ)));
+                    camera.lookAt(center);
+                    controls.update();
+                }
+            } else {
+                // Default to Sol
+                controls.target.set(0, 0, 0);
+                camera.position.set(0, 0, 50);
+                camera.lookAt(0, 0, 0);
+                controls.update();
+            }
         }
 
         // Dropdown handlers
