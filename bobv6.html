@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bobiverse Starmap - Per Book/Chapter</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; }
+        canvas { display: block; }
+        #info { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; text-shadow: 0 0 5px #0000ff; }
+        #bookSelect { position: absolute; top: 40px; left: 10px; margin-bottom: 10px; width: 250px; background: rgba(0,0,0,0.5); color: white; border: 1px solid #00ffff; }
+        #chapterSelect { position: absolute; top: 70px; left: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); color: white; border: 1px solid #00ffff; }
+        #controls-info { position: absolute; bottom: 10px; left: 10px; color: white; font-family: Arial; font-size: 12px; text-shadow: 0 0 5px #0000ff; }
+        #tooltip { position: absolute; display: none; background: rgba(0,0,0,0.7); color: white; padding: 5px; border-radius: 3px; pointer-events: none; border: 1px solid #00ffff; }
+        #zoom-info { position: absolute; bottom: 10px; right: 10px; color: white; font-family: Arial; font-size: 12px; text-shadow: 0 0 5px #0000ff; }
+    </style>
+</head>
+<body>
+    <div id="info">Bobiverse Starmap (Books 1-3) - Select book/chapter to see Bob locations</div>
+    <select id="bookSelect">
+        <option>We Are Legion (We Are Bob)</option>
+        <option>For We Are Many</option>
+        <option>All These Worlds</option>
+    </select>
+    <select id="chapterSelect"></select>
+    <div id="controls-info">Controls: Mouse drag to orbit, scroll to zoom, right-drag to pan</div>
+    <div id="tooltip"></div>
+    <div id="zoom-info">Zoom: 100%</div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/RGBELoader.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Better lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1, 1000);
+        camera.add(pointLight);
+
+        // Orbit controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        controls.minDistance = 0.01;
+        controls.maxDistance = Infinity;
+
+        // Texture loader
+        const textureLoader = new THREE.TextureLoader();
+
+        // Load textures for PBR
+        const sunMap = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
+        const rockyMap = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_earth_daymap.jpg');
+        const jovianMap = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg');
+        const metalMap = textureLoader.load('https://dl.ambientcg.com/Metal032_2K-PNG/Metal032_2K-PNG_color.png');
+        const metalNormal = textureLoader.load('https://dl.ambientcg.com/Metal032_2K-PNG/Metal032_2K-PNG_normalgl.png');
+        const metalRoughness = textureLoader.load('https://dl.ambientcg.com/Metal032_2K-PNG/Metal032_2K-PNG_roughness.png');
+
+        // Add nebula background
+        const rgbeLoader = new THREE.RGBELoader();
+        rgbeLoader.load('https://dl.polyhaven.org/file/ph-asset-lib/files/free/hdr/1k/kiara_1_dawn_1k.hdr', function (texture) {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            scene.background = texture;
+            scene.environment = texture; // For PBR lighting
+        });
+
+        // Add space background (starfield)
+        const starCount = 5000;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i += 3) {
+            starPositions[i] = (Math.random() - 0.5) * 2000;
+            starPositions[i + 1] = (Math.random() - 0.5) * 2000;
+            starPositions[i + 2] = (Math.random() - 0.5) * 2000;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1, sizeAttenuation: true });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        // Systems with coordinates (from first three books)
+        const systems = {
+            'Sol': { x: 0.00, y: 0.00, z: 0.00 },
+            'Alpha Centauri': { x: -1.63, y: -1.37, z: -3.82 },
+            'Epsilon Eridani': { x: 6.20, y: 8.30, z: -1.73 },
+            'Epsilon Indi': { x: 5.64, y: -3.15, z: -9.87 },
+            '40 Eridani': { x: 7.13, y: 14.50, z: -2.17 },
+            'Eta Cassiopeiae': { x: 10.10, y: 2.20, z: 16.42 },
+            '82 Eridani': { x: 9.25, y: 11.02, z: -13.45 },
+            'Delta Pavonis': { x: 4.28, y: -6.80, z: -18.21 },
+            'Beta Hydri': { x: 5.33, y: 0.60, z: -23.70 },
+            'Delta Eridani': { x: 16.34, y: 24.05, z: -5.00 },
+            'Gamma Pavonis': { x: 9.87, y: -7.82, z: -27.45 },
+            'Gliese 877': { x: 6.78, y: -1.95, z: -27.20 },
+            'HD 85512': { x: -30.41, y: 19.17, z: -1.93 },
+            'Eta Leporis': { x: 0.75, y: 47.50, z: -11.99 },
+            'HIP 84051': { x: -5.25, y: -24.17, z: -32.26 },
+            'Zeta Tucanae': { x: -4.5, y: -15.0, z: -25.0 },
+            'Kappa Ceti': { x: 7.5, y: 5.0, z: -3.0 },
+            'Gamma Leporis': { x: 12.0, y: 18.0, z: -8.0 }
+        };
+
+        // Planets data per system
+        const planets = {
+            'Sol': [{name: 'Earth', type: 'Rocky'}],
+            'Alpha Centauri': [{name: 'AC-B-1', type: 'Rocky'}, {name: 'AC-B-2', type: 'Unknown'}],
+            'Epsilon Eridani': [{name: 'EE-1', type: 'Rocky'}, {name: 'Ragnarok', type: 'Rocky Habitable'}, {name: 'EE-3', type: 'Jovian'}, {name: 'EE-4', type: 'Neptunian'}],
+            'Epsilon Indi': [{name: 'Big Top', type: 'Jovian'}, {name: 'Klown Kar Planet', type: 'Moon'}],
+            '40 Eridani': [{name: 'Vulcan', type: 'Rocky Habitable'}, {name: 'Romulus', type: 'Rocky Habitable'}, {name: 'OE-A-2', type: 'Jovian'}, {name: 'OE-A-3', type: 'Jovian'}],
+            'Eta Cassiopeiae': [{name: 'EC-A-1', type: 'Rocky'}, {name: 'EC-A-2', type: 'Rocky'}, {name: 'Poseidon', type: 'Water Habitable'}, {name: 'EC-A-4', type: 'Rocky'}, {name: 'EC-A-5', type: 'Rocky'}],
+            '82 Eridani': [{name: 'Asgard', type: 'Rocky Habitable'}, {name: 'Jotunheim/Takama-ga-hara', type: 'Rocky Habitable'}, {name: 'Valhalla', type: 'Moon'}],
+            'Delta Pavonis': [{name: 'DP-4', type: 'Rocky Habitable'}],
+            'Beta Hydri': [{name: 'BH-4', type: 'Rocky'}],
+            'Delta Eridani': [{name: 'DE-1', type: 'Rocky'}, {name: 'DE-2', type: 'Rocky'}, {name: 'DE-3', type: 'Rocky'}, {name: 'Eden', type: 'Rocky Habitable'}, {name: 'DE-5', type: 'Rocky'}],
+            'Gamma Pavonis': [{name: 'GP-3', type: 'Rocky Habitable'}],
+            'Gliese 877': [{name: 'GL877-1', type: 'Rocky Habitable'}, {name: 'GL877-2', type: 'Rocky Habitable'}, {name: 'GL877-3', type: 'Jovian'}],
+            'HIP 84051': [{name: 'New Pav', type: 'Rocky Habitable'}],
+            'Zeta Tucanae': [{name: 'ZT-?', type: 'Rocky'}]
+            // Add more if known for other systems
+        };
+
+        // Connections for lines (pairs of system names where dist < 15)
+        const connections = [
+            ['Epsilon Eridani', 'Kappa Ceti'],
+            ['Sol', 'Alpha Centauri'],
+            ['Beta Hydri', 'Gliese 877'],
+            ['Epsilon Eridani', '40 Eridani'],
+            ['Gamma Pavonis', 'Gliese 877'],
+            ['Delta Eridani', 'Gamma Leporis'],
+            ['40 Eridani', 'Gamma Leporis'],
+            ['Epsilon Indi', 'Delta Pavonis'],
+            ['82 Eridani', 'Gamma Leporis'],
+            ['Delta Pavonis', 'Beta Hydri'],
+            ['Sol', 'Kappa Ceti'],
+            ['40 Eridani', '82 Eridani'],
+            ['82 Eridani', 'Kappa Ceti'],
+            ['Epsilon Eridani', '82 Eridani'],
+            ['Alpha Centauri', 'Epsilon Eridani'],
+            ['Epsilon Eridani', 'Gamma Leporis'],
+            ['40 Eridani', 'Delta Eridani'],
+            ['Delta Pavonis', 'Zeta Tucanae'],
+            ['Epsilon Eridani', 'Epsilon Indi'],
+            ['Epsilon Indi', 'Beta Hydri'],
+            ['Kappa Ceti', 'Gamma Leporis'],
+            ['Beta Hydri', 'Gamma Pavonis'],
+            ['Sol', 'Epsilon Eridani'],
+            ['Delta Pavonis', 'Gliese 877'],
+            ['Epsilon Indi', 'Kappa Ceti'],
+            ['Delta Pavonis', 'Gamma Pavonis'],
+            ['Alpha Centauri', 'Kappa Ceti'],
+            ['HIP 84051', 'Zeta Tucanae'],
+            ['Sol', 'Epsilon Indi'],
+            ['Alpha Centauri', 'Epsilon Indi']
+        ];
+
+        // Add lines between connected systems
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
+        connections.forEach(pair => {
+            const pos1 = systems[pair[0]];
+            const pos2 = systems[pair[1]];
+            const points = [];
+            points.push(new THREE.Vector3(pos1.x, pos1.y, pos1.z));
+            points.push(new THREE.Vector3(pos2.x, pos2.y, pos2.z));
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, lineMaterial);
+            scene.add(line);
+        });
+
+        // Add all systems as yellow sun-like spheres, Sol special
+        const systemMeshes = []; // For spheres and labels
+        Object.entries(systems).forEach(([name, pos]) => {
+            const isSol = name === 'Sol';
+            const geometry = new THREE.SphereGeometry(isSol ? 0.8 : 0.5, 32, 32);
+            const material = new THREE.MeshStandardMaterial({ 
+                map: sunMap,
+                normalMap: sunMap, // Reuse for bump
+                metalness: 0,
+                roughness: 0.5,
+                emissiveMap: sunMap,
+                emissiveIntensity: 0.5 
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(pos.x, pos.y, pos.z);
+            sphere.userData = { name: name, type: 'system' };
+            scene.add(sphere);
+            systemMeshes.push(sphere);
+
+            // Add glow for suns
+            const glowGeometry = new THREE.SphereGeometry(isSol ? 1.2 : 0.7, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({ color: isSol ? 0xffa500 : 0xffff00, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.position.set(pos.x, pos.y, pos.z);
+            scene.add(glow);
+            systemMeshes.push(glow);
+
+            // Add planets for this system (spheres only, labels added later)
+            const systemPlanets = planets[name] || [];
+            systemPlanets.forEach((planet, index) => {
+                const angle = (index / systemPlanets.length) * Math.PI * 2;
+                const orbitRadius = 1.5 + Math.random() * 0.5; // Vary slightly
+                const planetGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+                const planetTex = planet.type.includes('Rocky') ? rockyMap : jovianMap;
+                const planetMaterial = new THREE.MeshStandardMaterial({ 
+                    map: planetTex,
+                    normalMap: planetTex, // Reuse for bump
+                    metalness: 0,
+                    roughness: 0.8 
+                });
+                const planetMesh = new THREE.Mesh(planetGeometry, planetMaterial);
+                planetMesh.position.set(pos.x + Math.cos(angle) * orbitRadius, pos.y + Math.sin(angle) * orbitRadius, pos.z + (Math.random() - 0.5) * 0.5); // Slight z variance
+                planetMesh.userData = { name: planet.name, type: 'planet' };
+                scene.add(planetMesh);
+                systemMeshes.push(planetMesh);
+            });
+        });
+
+        // Bob data per book/chapter (compiled from timelines/summaries; add more as needed)
+        const bobData = {
+            'We Are Legion (We Are Bob)': {
+                'Chapter 2': [{name: 'Bob', system: 'Sol'}],
+                'Chapter 12': [{name: 'Bob', system: 'Sol'}],
+                'Chapter 14': [{name: 'Bob', system: 'Epsilon Eridani'}],
+                'Chapter 15': [{name: 'Bob', system: 'Epsilon Eridani'}],
+                'Chapter 16': [{name: 'Bob', system: 'Epsilon Eridani'}],
+                'Chapter 17': [{name: 'Bob', system: 'Epsilon Eridani'}, {name: 'Bill', system: 'Epsilon Eridani'}, {name: 'Riker', system: 'Epsilon Eridani'}, {name: 'Milo', system: 'Epsilon Eridani'}, {name: 'Mario', system: 'Epsilon Eridani'}],
+                'Chapter 18': [{name: 'Bob', system: 'Delta Eridani'}, {name: 'Milo', system: '40 Eridani'}, {name: 'Mario', system: 'Beta Hydri'}, {name: 'Bill', system: 'Epsilon Eridani'}, {name: 'Riker', system: 'Epsilon Eridani'}],
+                'Chapter 19': [{name: 'Milo', system: '40 Eridani'}],
+                'Chapter 20': [{name: 'Bill', system: 'Epsilon Eridani'}, {name: 'Riker', system: 'Sol'}, {name: 'Homer', system: 'Sol'}, {name: 'Garfield', system: 'Epsilon Eridani'}],
+                'Chapter 21': [{name: 'Riker', system: 'Sol'}, {name: 'Homer', system: 'Sol'}],
+                'Chapter 22': [{name: 'Bill', system: 'Epsilon Eridani'}, {name: 'Garfield', system: 'Epsilon Eridani'}, {name: 'Calvin', system: 'Alpha Centauri'}, {name: 'Goku', system: 'Alpha Centauri'}, {name: 'Linus', system: 'Epsilon Indi'}],
+                'Chapter 23': [{name: 'Milo', system: '82 Eridani'}],
+                'Chapter 27': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 28': [{name: 'Calvin', system: 'Alpha Centauri'}, {name: 'Goku', system: 'Alpha Centauri'}],
+                'Chapter 30': [{name: 'Bob', system: 'Delta Eridani'}, {name: 'Marvin', system: 'Delta Eridani'}, {name: 'Luke', system: 'Delta Eridani'}, {name: 'Bender', system: 'Delta Eridani'}],
+                'Chapter 39': [{name: 'Luke', system: 'Kappa Ceti'}, {name: 'Bender', system: 'Gamma Leporis'}],
+                'Chapter 40': [{name: 'Linus', system: 'Epsilon Indi'}],
+                'Chapter 57': [{name: 'Mario', system: 'Beta Hydri'}]
+            },
+            'For We Are Many': {
+                'Chapter 1': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 2': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 3': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 4': [{name: 'Mulder', system: 'Eta Cassiopeiae'}],
+                'Chapter 5': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 6': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 7': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 8': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 9': [{name: 'Mario', system: 'Zeta Tucanae'}],
+                'Chapter 10': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 11': [{name: 'Bill', system: 'Epsilon Eridani'}],
+                'Chapter 12': [{name: 'Mario', system: 'HD 85512'}],
+                'Chapter 13': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 14': [{name: 'Mario', system: 'HD 85512'}],
+                'Chapter 15': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 16': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 17': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 18': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 19': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 20': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 21': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 22': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 23': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 24': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 25': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 26': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 27': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 28': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 29': [{name: 'Bashful', system: 'Gliese 877'}],
+                'Chapter 30': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 31': [{name: 'Bill', system: 'Epsilon Eridani'}],
+                'Chapter 32': [{name: 'Bob', system: 'Delta Eridani'}]
+            },
+            'All These Worlds': {
+                'Chapter 1': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 5': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 7': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 8': [{name: 'Marcus', system: 'Eta Cassiopeiae'}],
+                'Chapter 10': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 12': [{name: 'Howard', system: '40 Eridani'}, {name: 'Will', system: 'Sol'}],
+                'Chapter 13': [{name: 'Marcus', system: 'Eta Cassiopeiae'}],
+                'Chapter 16': [{name: 'Marcus', system: 'Eta Cassiopeiae'}, {name: 'Riker', system: 'Sol'}],
+                'Chapter 17': [{name: 'Bob', system: '82 Eridani'}],
+                'Chapter 20': [{name: 'Howard', system: '40 Eridani'}],
+                'Chapter 21': [{name: 'Bob', system: '82 Eridani'}],
+                'Chapter 22': [{name: 'Bob', system: 'Gliese 877'}],
+                'Chapter 24': [{name: 'Bob', system: 'Gliese 877'}],
+                'Chapter 25': [{name: 'Bob', system: '82 Eridani'}],
+                'Chapter 31': [{name: 'Marcus', system: 'Eta Cassiopeiae'}],
+                'Chapter 34': [{name: 'Bob', system: 'Delta Eridani'}],
+                'Chapter 36': [{name: 'Riker', system: 'Sol'}],
+                'Chapter 39': [{name: 'Marcus', system: 'Eta Cassiopeiae'}]
+            }
+        };
+
+        // Timeline years per book/chapter (extracted from complete timelines)
+        const years = {
+            'We Are Legion (We Are Bob)': {
+                'Chapter 2': '2133',
+                'Chapter 12': '2133',
+                'Chapter 14': '2144',
+                'Chapter 15': '2144',
+                'Chapter 16': '2144',
+                'Chapter 17': '2145',
+                'Chapter 18': '2145',
+                'Chapter 19': '2152',
+                'Chapter 20': '2145',
+                'Chapter 21': '2157',
+                'Chapter 22': '2150',
+                'Chapter 23': '2153',
+                'Chapter 27': '2165',
+                'Chapter 28': '2163',
+                'Chapter 30': '2165',
+                'Chapter 39': '2165',
+                'Chapter 40': '2165',
+                'Chapter 57': '2165'
+            },
+            'For We Are Many': {
+                'Chapter 1': '2167',
+                'Chapter 2': '2167',
+                'Chapter 3': '2167',
+                'Chapter 4': '2170',
+                'Chapter 5': '2167',
+                'Chapter 6': '2171',
+                'Chapter 7': '2167',
+                'Chapter 8': '2172',
+                'Chapter 9': '2173',
+                'Chapter 10': '2176',
+                'Chapter 11': '2169',
+                'Chapter 12': '2171',
+                'Chapter 13': '2180',
+                'Chapter 14': '2170',
+                'Chapter 15': '2180',
+                'Chapter 16': '2189',
+                'Chapter 17': '2171',
+                'Chapter 18': '2172',
+                'Chapter 19': '2172',
+                'Chapter 20': '2189',
+                'Chapter 21': '2174',
+                'Chapter 22': '2173',
+                'Chapter 23': '2175',
+                'Chapter 24': '2174',
+                'Chapter 25': '2189',
+                'Chapter 26': '2175',
+                'Chapter 27': '2178',
+                'Chapter 28': '2175',
+                'Chapter 29': '2190',
+                'Chapter 30': '2187',
+                'Chapter 31': '2191',
+                'Chapter 32': '2191'
+            },
+            'All These Worlds': {
+                'Chapter 1': '2212',
+                'Chapter 3': '2212',
+                'Chapter 5': '2213',
+                'Chapter 7': '2214',
+                'Chapter 8': '2215',
+                'Chapter 10': '2215',
+                'Chapter 12': '2215',
+                'Chapter 13': '2215',
+                'Chapter 16': '2215',
+                'Chapter 17': '2215',
+                'Chapter 20': '2215',
+                'Chapter 21': '2217',
+                'Chapter 22': '2217',
+                'Chapter 24': '2218',
+                'Chapter 25': '2218',
+                'Chapter 26': '2220',
+                'Chapter 31': '2220',
+                'Chapter 34': '2220',
+                'Chapter 35': '2221',
+                'Chapter 36': '2221',
+                'Chapter 39': '2221'
+            }
+        };
+        // Font loader for labels
+        const loader = new THREE.FontLoader();
+        let font = null;
+        // All labels (for systems and bobs) to update orientation
+        let allLabels = [];
+        // Add system labels once font is loaded
+        function addSystemLabels() {
+            Object.entries(systems).forEach(([name, pos]) => {
+                const textGeo = new THREE.TextGeometry(name, {
+                    font: font,
+                    size: 0.4,
+                    height: 0.05
+                });
+                const textMat = new THREE.MeshBasicMaterial({ color: 0xdddddd });
+                const text = new THREE.Mesh(textGeo, textMat);
+                text.position.set(pos.x + 0.5, pos.y + 1.0, pos.z + 0.5); // Higher offset to avoid overlap
+                scene.add(text);
+                allLabels.push(text);
+                systemMeshes.push(text);
+            });
+            // Add planet labels
+            Object.entries(planets).forEach(([sysName, sysPlanets]) => {
+                const pos = systems[sysName];
+                if (pos) {
+                    sysPlanets.forEach((planet, index) => {
+                        const angle = (index / sysPlanets.length) * Math.PI * 2;
+                        const orbitRadius = 1.5 + Math.random() * 0.5;
+                        const planetPos = new THREE.Vector3(pos.x + Math.cos(angle) * orbitRadius, pos.y + Math.sin(angle) * orbitRadius, pos.z + (Math.random() - 0.5) * 0.5);
+                        const textGeo = new THREE.TextGeometry(planet.name, {
+                            font: font,
+                            size: 0.3,
+                            height: 0.05
+                        });
+                        const textMat = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
+                        const text = new THREE.Mesh(textGeo, textMat);
+                        text.position.set(planetPos.x + 0.3, planetPos.y - 0.5, planetPos.z); // Below planet to avoid overlap
+                        scene.add(text);
+                        allLabels.push(text);
+                        systemMeshes.push(text);
+                    });
+                }
+            });
+        }
+        loader.load('https://cdn.jsdelivr.net/npm/three@0.147.0/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
+            font = loadedFont;
+            addSystemLabels();
+            // Initial update
+            bookSelect.dispatchEvent(new Event('change'));
+        });
+        // Bob meshes (spheres and labels, to clear on update)
+        let bobMeshes = [];
+        // Function to create a simple spaceship model resembling Heaven-1 (cylindrical probe)
+        function createSpaceship() {
+            const spaceship = new THREE.Group();
+            // Main body (long cylinder)
+            const bodyGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 32);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                map: metalMap,
+                normalMap: metalNormal,
+                roughnessMap: metalRoughness,
+                metalness: 0.8,
+                roughness: 0.4
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.rotation.x = Math.PI / 2; // Orient horizontally
+            spaceship.add(body);
+            // Front sensor/dish (sphere)
+            const sensorGeometry = new THREE.SphereGeometry(0.2, 32, 32);
+            const sensorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff,
+                metalness: 0.5,
+                roughness: 0.2
+            });
+            const sensor = new THREE.Mesh(sensorGeometry, sensorMaterial);
+            sensor.position.z = 0.75;
+            spaceship.add(sensor);
+            // Rear engine (cone for fusion drive)
+            const engineGeometry = new THREE.ConeGeometry(0.25, 0.5, 32);
+            const engineMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xff8800,
+                metalness: 0.3,
+                roughness: 0.7,
+                emissive: 0xff8800,
+                emissiveIntensity: 0.2
+            });
+            const engine = new THREE.Mesh(engineGeometry, engineMaterial);
+            engine.position.z = -0.75;
+            engine.rotation.x = -Math.PI / 2;
+            spaceship.add(engine);
+            // Antennas (thin cylinders)
+            for (let i = 0; i < 3; i++) {
+                const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
+                const antenna = new THREE.Mesh(antennaGeometry, bodyMaterial);
+                const angle = i * (2 * Math.PI / 3);
+                antenna.position.set(Math.cos(angle) * 0.2, Math.sin(angle) * 0.2, 0);
+                antenna.rotation.z = Math.PI / 4; // Tilt
+                spaceship.add(antenna);
+            }
+            spaceship.scale.set(0.5, 0.5, 0.5); // Scale down if needed
+            // Add glow
+            const glowGeometry = new THREE.SphereGeometry(0.8, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            spaceship.add(glow);
+            return spaceship;
+        }
+        // Function to get sorted chapters up to the selected one
+        function getCumulativeBobs(book, selectedChapter) {
+            const chapterKeys = Object.keys(bobData[book] || {});
+            // Sort chapters numerically by extracting number after 'Chapter '
+            chapterKeys.sort((a, b) => {
+                const numA = parseInt(a.replace('Chapter ', ''), 10);
+                const numB = parseInt(b.replace('Chapter ', ''), 10);
+                return numA - numB;
+            });
+            const bobPositions = new Map(); // bobName => system
+            const selectedIndex = chapterKeys.indexOf(selectedChapter);
+            if (selectedIndex === -1) return [];
+            // Process chapters up to selected
+            for (let i = 0; i <= selectedIndex; i++) {
+                const chapter = chapterKeys[i];
+                const list = bobData[book][chapter] || [];
+                list.forEach(bob => {
+                    bobPositions.set(bob.name, bob.system);
+                });
+            }
+            // Return list of {name, system} for all known bobs
+            return Array.from(bobPositions.entries()).map(([name, system]) => ({name, system}));
+        }
+        // Function to update Bobs (cumulative)
+        function updateBobs(book, chapter) {
+            // Remove old bob meshes
+            bobMeshes.forEach(m => scene.remove(m));
+            bobMeshes = [];
+            allLabels = allLabels.filter(label => systemMeshes.includes(label)); // Reset to only system labels
+            if (!font) return; // Wait for font
+            const cumulativeList = getCumulativeBobs(book, chapter);
+            // Group bobs by system to handle stacking labels
+            const bobsBySystem = {};
+            cumulativeList.forEach(bob => {
+                let sysKey = typeof bob.system === 'string' ? bob.system : 'transit_' + bob.system.from + '_' + bob.system.to;
+                if (!bobsBySystem[sysKey]) bobsBySystem[sysKey] = [];
+                bobsBySystem[sysKey].push(bob.name);
+            });
+            Object.entries(bobsBySystem).forEach(([sysKey, names]) => {
+                let pos;
+                if (sysKey.startsWith('transit_')) {
+                    const [ , from, to ] = sysKey.split('_');
+                    const posFrom = systems[from];
+                    const posTo = systems[to];
+                    pos = {
+                        x: (posFrom.x + posTo.x) / 2,
+                        y: (posFrom.y + posTo.y) / 2,
+                        z: (posFrom.z + posTo.z) / 2
+                    };
+                } else {
+                    pos = systems[sysKey];
+                }
+                if (pos) {
+                    names.forEach((name, index) => {
+                        // Create spaceship instead of sphere
+                        const spaceship = createSpaceship();
+                        spaceship.position.set(pos.x + index * 0.2 - 1.0, pos.y + 1.5, pos.z); // Offset to left and above to avoid planets
+                        spaceship.userData = { name: name, type: 'bob' };
+                        scene.add(spaceship);
+                        bobMeshes.push(spaceship);
+                        // Label
+                        const textGeo = new THREE.TextGeometry(name, {
+                            font: font,
+                            size: 0.5,
+                            height: 0.1
+                        });
+                        const textMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                        const text = new THREE.Mesh(textGeo, textMat);
+                        text.position.set(pos.x + index * 0.2 - 1.0 + 0.8, pos.y + 1.5 + 0.8 - index * 0.6, pos.z); // Adjusted stack
+                        text.lookAt(camera.position); // Face camera initially
+                        scene.add(text);
+                        bobMeshes.push(text);
+                        allLabels.push(text);
+                    });
+                }
+            });
+            // Dynamically position camera to frame the Bobs
+            if (cumulativeList.length > 0) {
+                const box = new THREE.Box3();
+                cumulativeList.forEach(bob => {
+                    let pos;
+                    if (typeof bob.system === 'string') {
+                        pos = systems[bob.system];
+                    } else {
+                        const posFrom = systems[bob.system.from];
+                        const posTo = systems[bob.system.to];
+                        pos = {
+                            x: (posFrom.x + posTo.x) / 2,
+                            y: (posFrom.y + posTo.y) / 2,
+                            z: (posFrom.z + posTo.z) / 2
+                        };
+                    }
+                    if (pos) {
+                        box.expandByPoint(new THREE.Vector3(pos.x, pos.y, pos.z));
+                    }
+                });
+                if (!box.isEmpty()) {
+                    const center = new THREE.Vector3();
+                    box.getCenter(center);
+                    controls.target.copy(center);
+                    const size = new THREE.Vector3();
+                    box.getSize(size);
+                    let maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim < 1) maxDim = 10; // Minimum view size for close/ single points
+                    const fov = camera.fov * (Math.PI / 180);
+                    let cameraZ = Math.abs(maxDim / Math.tan(fov / 2));
+                    cameraZ *= 1.5; // Padding
+                    camera.position.copy(center.clone().add(new THREE.Vector3(0, 0, cameraZ)));
+                    camera.lookAt(center);
+                    controls.update();
+                }
+            } else {
+                // Default to Sol
+                controls.target.set(0, 0, 0);
+                camera.position.set(0, 0, 50);
+                camera.lookAt(0, 0, 0);
+                controls.update();
+            }
+        }
+        // Dropdown handlers
+        const bookSelect = document.getElementById('bookSelect');
+        const chapterSelect = document.getElementById('chapterSelect');
+        bookSelect.onchange = () => {
+            const book = bookSelect.value;
+            chapterSelect.innerHTML = '';
+            const chapterKeys = Object.keys(bobData[book] || {});
+            // Sort chapters numerically
+            chapterKeys.sort((a, b) => {
+                const numA = parseInt(a.replace('Chapter ', ''), 10);
+                const numB = parseInt(b.replace('Chapter ', ''), 10);
+                return numA - numB;
+            });
+            chapterKeys.forEach(ch => {
+                const option = document.createElement('option');
+                option.value = ch;
+                option.text = ch + (years[book][ch] ? ' (' + years[book][ch] + ')' : '');
+                chapterSelect.add(option);
+            });
+            if (chapterSelect.options.length > 0) {
+                updateBobs(book, chapterSelect.value);
+            }
+        };
+        chapterSelect.onchange = () => {
+            updateBobs(bookSelect.value, chapterSelect.value);
+        };
+        // Camera position
+        camera.position.z = 50;
+        // Raycaster for tooltips
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const tooltip = document.getElementById('tooltip');
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(systemMeshes.concat(bobMeshes));
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                if (obj.userData && obj.userData.name) {
+                    tooltip.innerHTML = obj.userData.name + (obj.userData.type === 'system' ? ' (System)' : (obj.userData.type === 'planet' ? ' (Planet)' : ' (Bob)'));
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = event.clientX + 10 + 'px';
+                    tooltip.style.top = event.clientY + 10 + 'px';
+                    document.body.style.cursor = 'pointer';
+                }
+            } else {
+                tooltip.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+        }
+        document.addEventListener('mousemove', onMouseMove);
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            // Update all labels to face camera
+            allLabels.forEach(label => {
+                label.lookAt(camera.position);
+            });
+            // Update zoom info
+            const currentDistance = camera.position.distanceTo(controls.target);
+            const baseDistance = 50;
+            const zoomPercent = Math.round((baseDistance / (currentDistance || 1)) * 100);
+            document.getElementById('zoom-info').innerText = `Zoom: ${zoomPercent}%`;
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
