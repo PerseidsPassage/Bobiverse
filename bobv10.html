@@ -59,16 +59,16 @@
         const textureLoader = new THREE.TextureLoader();
 
         // Load textures for PBR
-        const sunMap = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_sun.jpg');
-        const rockyMap = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_earth_daymap.jpg');
-        const jovianMap = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg');
-        const metalMap = textureLoader.load('https://dl.ambientcg.com/Metal032_2K-PNG/Metal032_2K-PNG_color.png');
-        const metalNormal = textureLoader.load('https://dl.ambientcg.com/Metal032_2K-PNG/Metal032_2K-PNG_normalgl.png');
-        const metalRoughness = textureLoader.load('https://dl.ambientcg.com/Metal032_2K-PNG/Metal032_2K-PNG_roughness.png');
+        const sunMap = textureLoader.load('https://upload.wikimedia.org/wikipedia/commons/c/cb/Solarsystemscope_texture_2k_sun.jpg');
+        const rockyMap = textureLoader.load('https://upload.wikimedia.org/wikipedia/commons/c/c3/Solarsystemscope_texture_2k_earth_daymap.jpg');
+        const jovianMap = textureLoader.load('https://upload.wikimedia.org/wikipedia/commons/b/be/Solarsystemscope_texture_2k_jupiter.jpg');
+        const metalMap = textureLoader.load('https://freepbr.com/wp-content/uploads/2014/08/rustediron2_basecolor.png');
+        const metalNormal = textureLoader.load('https://freepbr.com/wp-content/uploads/2014/08/rustediron2_normal.png');
+        const metalRoughness = textureLoader.load('https://freepbr.com/wp-content/uploads/2014/08/rustediron2_roughness.png');
 
         // Add nebula background
         const rgbeLoader = new THREE.RGBELoader();
-        rgbeLoader.load('https://dl.polyhaven.org/file/ph-asset-lib/files/free/hdr/1k/kiara_1_dawn_1k.hdr', function (texture) {
+        rgbeLoader.load('https://dl.polyhaven.com/file/ph-asset-lib/files/free/hdr/1k/kiara_1_dawn_1k.hdr', function (texture) {
             texture.mapping = THREE.EquirectangularReflectionMapping;
             scene.background = texture;
             scene.environment = texture; // For PBR lighting
